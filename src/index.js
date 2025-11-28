@@ -1,5 +1,3 @@
-
-
 import {
   AssetType,
   Mesh,
@@ -16,12 +14,15 @@ import {
   PanelUI,
   Interactable,
   ScreenSpace,
-  PhysicsBody, PhysicsShape, PhysicsShapeType, PhysicsState, PhysicsSystem
+  PhysicsBody,
+  PhysicsShape,
+  PhysicsShapeType,
+  PhysicsState,
+  PhysicsSystem,
+  BoxGeometry
 } from '@iwsdk/core';
 
-
 import { PanelSystem } from './panel.js';
-
 
 const assets = {
   chimeSound: {
@@ -29,7 +30,6 @@ const assets = {
     type: AssetType.Audio,
     priority: 'background'
   },
-
 };
 
 World.create(document.getElementById('scene-container'), {
@@ -37,56 +37,101 @@ World.create(document.getElementById('scene-container'), {
   xr: {
     sessionMode: SessionMode.ImmersiveVR,
     offer: 'always',
-    // Optional structured features; layers/local-floor are offered by default
-    features: { handTracking: true, layers: false } 
+    features: { handTracking: true, layers: false }
   },
-  features: { locomotion: { useWorker: true }, grabbing: true, physics: true},
-  level: '/glxf/Composition.glxf' 
+  features: { locomotion: { useWorker: true }, grabbing: true, physics: true },
+  
 }).then((world) => {
   const { camera } = world;
-  
+
   // Create a green sphere
   const sphereGeometry = new SphereGeometry(0.25, 32, 32);
   const greenMaterial = new MeshStandardMaterial({ color: "red" });
   const sphere = new Mesh(sphereGeometry, greenMaterial);
   sphere.position.set(1, 1.5, -3);
   const sphereEntity = world.createTransformEntity(sphere);
-  sphereEntity.addComponent(PhysicsShape, { shape: PhysicsShapeType.Auto,  density: 0.2,  friction: 0.5,  restitution: 0.9 });
+  sphereEntity.addComponent(PhysicsShape, { shape: PhysicsShapeType.Auto, density: 0.2, friction: 0.5, restitution: 0.9 });
   sphereEntity.addComponent(PhysicsBody, { state: PhysicsState.Dynamic });
 
-  // create a floor
-  const floorMesh = new Mesh(new PlaneGeometry(20, 20), new MeshStandardMaterial({color:"tan"}));
+  // Global floor
+  const floorMesh = new Mesh(new PlaneGeometry(40, 30), new MeshStandardMaterial({ color: "grey", side: 2}));
   floorMesh.rotation.x = -Math.PI / 2;
   const floorEntity = world.createTransformEntity(floorMesh);
   floorEntity.addComponent(LocomotionEnvironment, { type: EnvironmentType.STATIC });
-  floorEntity.addComponent(PhysicsShape, { shape: PhysicsShapeType.Auto});
+  floorEntity.addComponent(PhysicsShape, { shape: PhysicsShapeType.Auto });
   floorEntity.addComponent(PhysicsBody, { state: PhysicsState.Static });
 
-  let numBounces = 0;
-  function gameLoop() {
-      //console.log(sphereEntity.object3D.position.y);
-      if (sphereEntity.object3D.position.y < 0.27) {
-          numBounces += 1;
-          console.log(`Sphere has bounced ${numBounces} times`);
-          //sphereEntity.destroy()
-      }
-      requestAnimationFrame(gameLoop);
-    }
-  gameLoop();
-
-
+ //room1
+ function createRoom(world, width = 10, depth = 10, height = 3, color = "pink") {
+  const roomRoot = world.createTransformEntity();
+  const wallmat= new MeshStandardMaterial({ color: "pink", side: 2 });
+  const floorMat= new MeshStandardMaterial({ color: "tan", side: 2 });
+  const ceilingMat= new MeshStandardMaterial({ color: "white", side: 2 });
+  // Back Wall
+  const back = new Mesh(new PlaneGeometry(width, height), wallmat);
+  back.position.set(0, height / 2, -depth / 2);
+  roomRoot.object3D.add(back);
+  // no rotation (faces forward)
+  // Front Wall (behind player)
+  const front = new Mesh(new PlaneGeometry(width, height), wallmat);
+  front.position.set(0, height / 2, depth / 2);
+  front.rotation.y = Math.PI; // face inward
+  roomRoot.object3D.add(front);
+  // Left Wall
+  const left = new Mesh(new PlaneGeometry(depth, height), wallmat);
+  left.position.set(-width / 2, height / 2, 0);
+  left.rotation.y = Math.PI / 2;
+  roomRoot.object3D.add(left);
+  // Right Wall
+  const right = new Mesh(new PlaneGeometry(depth, height), wallmat);
+  right.position.set(width / 2, height / 2, 0);
+  right.rotation.y = -Math.PI / 2;
+  roomRoot.object3D.add(right);
+  // Floor
+  const floor = new Mesh(new PlaneGeometry(width, depth), floorMat);
+  floor.rotation.x = -Math.PI / 2;
+  floor.position.set(0, 0.2, 0);
+  roomRoot.object3D.add(floor);
+  // Ceiling (optional)
+  const ceiling = new Mesh(new PlaneGeometry(width, depth), ceilingMat);
+  ceiling.rotation.x = Math.PI / 2;
+  ceiling.position.set(0, height, 0);
+  roomRoot.object3D.add(ceiling);
+  // Add all to world
   
-  world.registerSystem(PhysicsSystem).registerComponent(PhysicsBody).registerComponent(PhysicsShape);
   
+  return roomRoot;
+  
+}
+const room1= createRoom(world,10,10,3);
+room1.object3D.position.set(-13,0,-5)
 
 
 
 
 
-  // vvvvvvvv EVERYTHING BELOW WAS ADDED TO DISPLAY A BUTTON TO ENTER VR FOR QUEST 1 DEVICES vvvvvv
-  //          (for some reason IWSDK doesn't show Enter VR button on Quest 1)
+
+
+
+
+
+
+
+
+
+
+
+
+
+  // ----------------------------------------------------
+
+  world.registerSystem(PhysicsSystem)
+    .registerComponent(PhysicsBody)
+    .registerComponent(PhysicsShape);
+
+  // Quest 1 UI Panel
   world.registerSystem(PanelSystem);
-  
+
   if (isMetaQuest1()) {
     const panelEntity = world
       .createTransformEntity()
@@ -101,12 +146,12 @@ World.create(document.getElementById('scene-container'), {
         left: '20px',
         height: '40%'
       });
+
     panelEntity.object3D.position.set(0, 1.29, -1.9);
   } else {
-    // Skip panel on non-Meta-Quest-1 devices
-    // Useful for debugging on desktop or newer headsets.
     console.log('Panel UI skipped: not running on Meta Quest 1 (heuristic).');
   }
+
   function isMetaQuest1() {
     try {
       const ua = (navigator && (navigator.userAgent || '')) || '';

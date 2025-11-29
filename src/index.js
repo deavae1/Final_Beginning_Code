@@ -19,7 +19,8 @@ import {
   PhysicsShapeType,
   PhysicsState,
   PhysicsSystem,
-  BoxGeometry
+  BoxGeometry,
+  OneHandGrabbable
 } from '@iwsdk/core';
 
 import { PanelSystem } from './panel.js';
@@ -30,6 +31,16 @@ const assets = {
     type: AssetType.Audio,
     priority: 'background'
   },
+  lamp: {
+    url:'/gltf/lamp/scene.gltf',
+    type: AssetType.GLTF,
+    priority: 'critical',
+  },
+  keyroom1: {
+    url: '/gltf/door_keys/scene.gltf',
+    type: AssetType.GLTF,
+    priority: 'critical',
+  }
 };
 
 World.create(document.getElementById('scene-container'), {
@@ -90,7 +101,7 @@ World.create(document.getElementById('scene-container'), {
   // Floor
   const floor = new Mesh(new PlaneGeometry(width, depth), floorMat);
   floor.rotation.x = -Math.PI / 2;
-  floor.position.set(0, 0.2, 0);
+  floor.position.set(0, 0.002, 0);
   roomRoot.object3D.add(floor);
   // Ceiling (optional)
   const ceiling = new Mesh(new PlaneGeometry(width, depth), ceilingMat);
@@ -98,13 +109,55 @@ World.create(document.getElementById('scene-container'), {
   ceiling.position.set(0, height, 0);
   roomRoot.object3D.add(ceiling);
   // Add all to world
-  
-  
   return roomRoot;
-  
 }
 const room1= createRoom(world,10,10,3);
 room1.object3D.position.set(-13,0,-5)
+
+//ROOM#1 Moveable lamp-to find key
+const cluelamp = AssetManager.getGLTF('lamp').scene;
+cluelamp.scale.set(0.007,0.007,0.007);
+cluelamp.position.set(-11,1.4,-6)
+const cluelampEntity = world.createTransformEntity(cluelamp);
+cluelampEntity.addComponent(PhysicsShape, { shape: PhysicsShapeType.Auto});
+cluelampEntity.addComponent(PhysicsBody, { state: PhysicsState.Dynamic });
+cluelampEntity.addComponent(Interactable);
+cluelampEntity.addComponent(OneHandGrabbable);
+
+let initialLampPos = cluelampEntity.object3D.position.clone();
+let keyDropped = false;
+//ROOM#1 Moveable key-from lamp
+const cluekey1 = AssetManager.getGLTF('keyroom1').scene;
+cluekey1.scale.set(0.3,0.3,0.3);
+cluelampEntity.object3D.add(cluekey1);
+cluekey1.position.set(-11,1.4,-6)
+
+//lamp and key functions
+world.on('update', () => {
+  if (keyDropped) return;
+
+  const lampPos = cluelampEntity.object3D.position;
+  const distanceMoved = lampPos.distanceTo(initialLampPos);
+
+  if (distanceMoved > 0.05) {
+    // detach key from lamp
+    cluelampEntity.object3D.remove(cluekey1);
+
+    // create a world entity for physics
+    const keyEntity = world.createTransformEntity(cluekey1);
+    keyEntity.object3D.position.copy(cluekey1.getWorldPosition(new THREE.Vector3()));
+
+    // add physics so it falls
+    keyEntity.addComponent(PhysicsShape, { shape: PhysicsShapeType.Auto });
+    keyEntity.addComponent(PhysicsBody, { state: PhysicsState.Dynamic, density: 0.1, friction: 0.5, restitution: 0.3 });
+
+    keyDropped = true;
+  }
+});
+
+
+
+
 
 
 
